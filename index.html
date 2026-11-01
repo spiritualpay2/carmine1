@@ -471,6 +471,14 @@ let vids=[], order=[], cur=null;
 const THUMBS={};
 function load(){
   let raw=null;
+  // Restore thumbnail data separately from video metadata. The previous loader
+  // read the video list but never reloaded the thumbnail bucket after a refresh.
+  try{
+    const savedThumbs=JSON.parse(localStorage.getItem(TKEY));
+    if(savedThumbs&&typeof savedThumbs==='object'&&!Array.isArray(savedThumbs)){
+      Object.assign(THUMBS,savedThumbs);
+    }
+  }catch(e){}
   try{raw=JSON.parse(localStorage.getItem(KEY2));}catch(e){}
   if(raw&&Array.isArray(raw)){vids=raw;}
   else{
@@ -485,7 +493,16 @@ function load(){
       save();saveThumbs();
     }
   }
-  vids.forEach(v=>{v.thumbState='idle';});
+  // Reconcile persisted thumbnail data with the current video list, and avoid
+  // keeping orphaned thumbnail blobs for videos that have been removed.
+  const validIds=new Set(vids.map(v=>v.id));
+  for(const id of Object.keys(THUMBS)){
+    if(!validIds.has(id))delete THUMBS[id];
+  }
+  vids.forEach(v=>{
+    v.hasThumb=!!THUMBS[v.id];
+    v.thumbState=v.hasThumb?'done':'idle';
+  });
 }
 function save(){
   try{localStorage.setItem(KEY2,JSON.stringify(vids));}catch(e){toast('Browser storage is full — links may not persist');}
